@@ -13,6 +13,10 @@ def parse_all_logs(log_folder, experiments):
         found = False
         root = f"{log_folder}{experiment}"
 
+        if os.path.exists(f'{root}/times.json'):
+            print("\tLogs already extracted\n")
+            continue
+
         file_list = []
         cores_number = cpu_count()
 
@@ -64,6 +68,10 @@ def extract_average_duration(log_folder, experimental_campaigns, threshold):
     for experiment in experimental_campaigns:
 
         print(f"Experimental campaign: {experiment} \n")
+
+        if os.path.exists(f'{log_folder}{experiment}/lines_data.json'):
+            print("\tData already extracted\n")
+            continue
 
         with open(f'{log_folder}{experiment}/times.json', 'r') as jobs_file:
             jobs = json.load(jobs_file)
@@ -199,14 +207,18 @@ def prepare_csv_ML(log_folder, experimental_campaigns, threshold, test_campaigns
     upper_bound = [["number_of_cells", "number_of_timestep", "nodes_number", "gathers", "wave_front_tracking", "hilbert_filter", "isotropic_kernel", "exec_time"]]
 
     all_data = []
-    candidate_train = []
     train_data = []
     test_data = []
 
     actual_data = 0
     previous_data = 0
 
+    counters = {}
+
     for experiment in experimental_campaigns:
+
+        counter_training = 0
+        counter_test = 0
 
         with open(f'{log_folder}{experiment}/times.json', 'r') as jobs_file:
             jobs = json.load(jobs_file)
@@ -264,10 +276,15 @@ def prepare_csv_ML(log_folder, experimental_campaigns, threshold, test_campaigns
         for idx in range(len(data)-1-actual_data,len(data)-1):
             if experiment not in test_campaigns:
                 train_data.append(data[idx+1])
+                counter_training += 1
             else:
                 test_data.append(data[idx+1])
+                counter_test += 1
 
         previous_data = len(data)-1
+
+        counters[experiment] = {"training": counter_training,
+                                "test": counter_test}
         
     unique_list = []
     for item in upper_bound:
@@ -288,10 +305,137 @@ def prepare_csv_ML(log_folder, experimental_campaigns, threshold, test_campaigns
         writer.writerow(["number_of_cells", "number_of_timestep", "nodes_number", "gathers", "wave_front_tracking", "hilbert_filter", "isotropic_kernel", "exec_time", "over"])
         writer.writerows(test_data)
 
+    with open('ML_model_indices_number.json', 'w') as file:
+        json.dump(counters, file, indent=4)
+
 
 def train_ML_models():
 
+    print("\n\n************************************************************\n")
+    print("4. Training ML models...")
+    print("\n************************************************************\n\n")
+
+    if os.path.isdir("output_ML_model"):
+        shutil.rmtree("output_ML_model")
+
+    os.system("python3 ../aMLLibrary/run.py -c config/config_aMLLibrary.ini -o output_ML_model")
+
+    if os.path.isdir("output_prediction_test"):
+        shutil.rmtree("output_prediction_test")
+
+    os.system("python3 ../aMLLibrary/predict.py -c config/predict_test.ini -r output_ML_model/best.pickle -o output_prediction_test")
+
+    if os.path.isdir("output_prediction_training"):
+        shutil.rmtree("output_prediction_training")
+    
+    os.system("python3 ../aMLLibrary/predict.py -c config/predict_train.ini -r output_ML_model/best.pickle -o output_prediction_training")
 
 
+def plot_final_results(log_folder, experimental_campaigns, threshold, test_campaigns):
 
-    return
+    print("\n\n************************************************************\n")
+    print("5. Exporting final results...")
+    print("\n************************************************************\n\n")
+
+    if not os.path.isdir("plots"):
+        os.mkdir("plots")
+
+    for ex in experimental_campaigns:
+        with open(f'{log_folder}{ex}/lines_data.json', 'r') as experiment_file:
+            data_experiment = json.load(experiment_file)
+
+    train_data = pd.read_csv('training_set.csv')
+    test_data = pd.read_csv('test_set.csv')
+    prediction_training = pd.read_csv('output_prediction_training/prediction.csv')
+    data_prediction = pd.read_csv('output_prediction_test/prediction.csv')
+
+    with open('ML_model_indices_number.json', 'r') as indices_file:
+            indices = json.load(indices_file)
+    
+    first_idx_train = 0
+    last_idx_train = 0
+    first_idx_test = 0
+    last_idx_test = 0
+
+    tp = 0
+    tn = 0
+    fp = 0
+    fn = 0
+
+    for ex in experimental_campaigns:
+
+        last_idx_train += indices[ex]['training']
+
+        for idx in range(first_idx_train, last_idx_train):
+            if train_data.iloc[idx]["exec_time"] > prediction_training.iloc[idx]["pred"]:
+                plt.plot(train_data.iloc[idx]["number_of_cells"], train_data.iloc[idx]["exec_time"], marker='.', markersize=3, color="red", alpha=0.3)
+            else:
+                plt.plot(train_data.iloc[idx]["number_of_cells"], train_data.iloc[idx]["exec_time"], marker='.', markersize=3, color="green", alpha=0.3)
+
+        xx_train = [train_data.iloc[idx]["number_of_cells"] for idx in range(first_idx_train, last_idx_train)]
+
+        first_idx_train += indices[ex]['training']
+
+        with open(f'{log_folder}{ex}/lines_data.json', 'r') as experiment_file:
+            data_experiment = json.load(experiment_file)
+
+        last_idx_test += indices[ex]['test']
+
+        xx_test = [test_data.iloc[idx]["number_of_cells"] for idx in range(first_idx_test, last_idx_test)]
+        xx_ = np.array(xx_train + xx_test)
+        plt.plot([min(xx_), max(xx_)], [data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*min(xx_), data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*max(xx_)], '--', color='orange', label='ML model')
+
+        for idx in range(first_idx_test, last_idx_test):
+
+            if test_data.iloc[idx]["exec_time"] > data_prediction.iloc[idx]["pred"]:
+                plt.plot(test_data.iloc[idx]["number_of_cells"], test_data.iloc[idx]["exec_time"], marker='x', markersize=5, color="red")
+
+                if test_data.iloc[idx]["exec_time"] > data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*test_data.iloc[idx]["number_of_cells"]:
+                    tp += 1
+                else:
+                    fp += 1
+
+            else:
+                plt.plot(test_data.iloc[idx]["number_of_cells"], test_data.iloc[idx]["exec_time"], marker='x', markersize=5, color="green")
+
+                if test_data.iloc[idx]["exec_time"] > data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*test_data.iloc[idx]["number_of_cells"]:
+                    fn += 1
+                else:
+                    tn += 1
+
+        first_idx_test += indices[ex]['test']
+
+        if ex in test_campaigns:
+            plt.title(f"Experiment: {ex} (test)")
+        else:
+            plt.title(f"Experiment: {ex} (training)")
+        plt.xlabel("Number of cells")
+        plt.ylabel("Execution time [s]")
+        plt.legend(loc='best')
+        plt.savefig(f'plots/{ex}.png', dpi=600)
+        plt.close()
+
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    accuracy = (tp + tn) / (tp + fp + tn + fn)
+    f1 = 2*(precision*recall)/(precision+recall)
+
+    print("\n")
+    print("Precision: %s" %round(precision,3))
+    print("Recall: %s" %round(recall,3))
+    print("Accuracy: %s" %round(accuracy,3))
+    print("F1-score: %s" %round(f1,3))
+
+    results = {
+        "precision": precision,
+        "recall": recall,
+        "accuracy": accuracy,
+        "F1-score": f1
+    }
+
+    with open('results.json', 'w') as file:
+        json.dump(results, file, indent=4)
+
+    print("\n\n************************************************************\n")
+    print("End of inference.")
+    print("\n************************************************************\n\n")

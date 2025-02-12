@@ -2,7 +2,7 @@ from functions import *
 
 if __name__ == '__main__':
     
-    with open("config_analysis_log.yaml", "r") as file:
+    with open("config/config_analysis_log.yaml", "r") as file:
         config = yaml.safe_load(file)
 
     log_folder = config['log_folder']
@@ -22,5 +22,5 @@ if __name__ == '__main__':
     # 4. Train ML models
     train_ML_models()
 
-    import pdb; pdb.set_trace()
-
+    # 5. Export final results
+    plot_final_results(log_folder, experimental_campaigns, threshold, test_campaigns)
