@@ -1,9 +1,5 @@
 __pycache__
-output*
-plots
-ML_model*
-results*
+outputs
 .DS_Store
 logs
-*.csv
 *.sh

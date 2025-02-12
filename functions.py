@@ -6,6 +6,9 @@ def parse_all_logs(log_folder, experiments):
     print("1. Analysing all provided logs...")
     print("\n************************************************************\n\n")
 
+    if not os.path.isdir("outputs"):
+        os.mkdir("outputs")
+
     for experiment in experiments:
 
         print(f"Experimental campaign: {experiment} \n")
@@ -291,21 +294,21 @@ def prepare_csv_ML(log_folder, experimental_campaigns, threshold, test_campaigns
         if item not in unique_list:
             unique_list.append(item)
 
-    with open('upper_bound_data.csv', mode='w', newline='') as file:
+    with open('outputs/upper_bound_data.csv', mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerows(unique_list)
 
-    with open('training_set.csv', mode='w', newline='') as file:
+    with open('outputs/training_set.csv', mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["number_of_cells", "number_of_timestep", "nodes_number", "gathers", "wave_front_tracking", "hilbert_filter", "isotropic_kernel", "exec_time", "over"])
         writer.writerows(train_data)
 
-    with open('test_set.csv', mode='w', newline='') as file:
+    with open('outputs/test_set.csv', mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["number_of_cells", "number_of_timestep", "nodes_number", "gathers", "wave_front_tracking", "hilbert_filter", "isotropic_kernel", "exec_time", "over"])
         writer.writerows(test_data)
 
-    with open('ML_model_indices_number.json', 'w') as file:
+    with open('outputs/ML_model_indices_number.json', 'w') as file:
         json.dump(counters, file, indent=4)
 
 
@@ -315,20 +318,20 @@ def train_ML_models():
     print("4. Training ML models...")
     print("\n************************************************************\n\n")
 
-    if os.path.isdir("output_ML_model"):
-        shutil.rmtree("output_ML_model")
+    if os.path.isdir("outputs/output_ML_model"):
+        shutil.rmtree("outputs/output_ML_model")
 
-    os.system("python3 ../aMLLibrary/run.py -c config/config_aMLLibrary.ini -o output_ML_model")
+    os.system("python3 ../aMLLibrary/run.py -c config/config_aMLLibrary.ini -o outputs/output_ML_model")
 
-    if os.path.isdir("output_prediction_test"):
-        shutil.rmtree("output_prediction_test")
+    if os.path.isdir("outputs/output_prediction_test"):
+        shutil.rmtree("outputs/output_prediction_test")
 
-    os.system("python3 ../aMLLibrary/predict.py -c config/predict_test.ini -r output_ML_model/best.pickle -o output_prediction_test")
+    os.system("python3 ../aMLLibrary/predict.py -c config/predict_test.ini -r outputs/output_ML_model/best.pickle -o outputs/output_prediction_test")
 
-    if os.path.isdir("output_prediction_training"):
-        shutil.rmtree("output_prediction_training")
+    if os.path.isdir("outputs/output_prediction_training"):
+        shutil.rmtree("outputs/output_prediction_training")
     
-    os.system("python3 ../aMLLibrary/predict.py -c config/predict_train.ini -r output_ML_model/best.pickle -o output_prediction_training")
+    os.system("python3 ../aMLLibrary/predict.py -c config/predict_train.ini -r outputs/output_ML_model/best.pickle -o outputs/output_prediction_training")
 
 
 def plot_final_results(log_folder, experimental_campaigns, threshold, test_campaigns):
@@ -337,19 +340,19 @@ def plot_final_results(log_folder, experimental_campaigns, threshold, test_campa
     print("5. Exporting final results...")
     print("\n************************************************************\n\n")
 
-    if not os.path.isdir("plots"):
-        os.mkdir("plots")
+    if not os.path.isdir("outputs/plots"):
+        os.mkdir("outputs/plots")
 
     for ex in experimental_campaigns:
         with open(f'{log_folder}{ex}/lines_data.json', 'r') as experiment_file:
             data_experiment = json.load(experiment_file)
 
-    train_data = pd.read_csv('training_set.csv')
-    test_data = pd.read_csv('test_set.csv')
-    prediction_training = pd.read_csv('output_prediction_training/prediction.csv')
-    data_prediction = pd.read_csv('output_prediction_test/prediction.csv')
+    train_data = pd.read_csv('outputs/training_set.csv')
+    test_data = pd.read_csv('outputs/test_set.csv')
+    prediction_training = pd.read_csv('outputs/output_prediction_training/prediction.csv')
+    data_prediction = pd.read_csv('outputs/output_prediction_test/prediction.csv')
 
-    with open('ML_model_indices_number.json', 'r') as indices_file:
+    with open('outputs/ML_model_indices_number.json', 'r') as indices_file:
             indices = json.load(indices_file)
     
     first_idx_train = 0
@@ -383,7 +386,13 @@ def plot_final_results(log_folder, experimental_campaigns, threshold, test_campa
 
         xx_test = [test_data.iloc[idx]["number_of_cells"] for idx in range(first_idx_test, last_idx_test)]
         xx_ = np.array(xx_train + xx_test)
-        plt.plot([min(xx_), max(xx_)], [data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*min(xx_), data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*max(xx_)], '--', color='orange', label='ML model')
+
+        min_xx_ = min(xx_)
+        max_xx_ = max(xx_)
+        if min_xx_ == max_xx_:
+            min_xx_ -= 0.5
+            max_xx_ += 0.5
+        plt.plot([min_xx_, max_xx_], [data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*min_xx_, data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*max_xx_], '--', color='orange', label='ML model')
 
         for idx in range(first_idx_test, last_idx_test):
 
@@ -412,7 +421,7 @@ def plot_final_results(log_folder, experimental_campaigns, threshold, test_campa
         plt.xlabel("Number of cells")
         plt.ylabel("Execution time [s]")
         plt.legend(loc='best')
-        plt.savefig(f'plots/{ex}.png', dpi=600)
+        plt.savefig(f'outputs/plots/{ex}.png', dpi=600)
         plt.close()
 
     precision = tp / (tp + fp)
@@ -433,7 +442,7 @@ def plot_final_results(log_folder, experimental_campaigns, threshold, test_campa
         "F1-score": f1
     }
 
-    with open('results.json', 'w') as file:
+    with open('outputs/results.json', 'w') as file:
         json.dump(results, file, indent=4)
 
     print("\n\n************************************************************\n")
