@@ -1,4 +1,4 @@
 log_folder: "logs/"
 skip_folders: ["logPreliminare", 'ex9', 'ex11', 'ex3']
 threshold: 0.99
-test_campaigns: ['ex6', 'ex8', 'ex9', 'ex10']
+test_campaigns: ['ex6', 'ex8', 'ex10']

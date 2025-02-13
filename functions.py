@@ -392,7 +392,8 @@ def plot_final_results(log_folder, experimental_campaigns, threshold, test_campa
         if min_xx_ == max_xx_:
             min_xx_ -= 0.5
             max_xx_ += 0.5
-        plt.plot([min_xx_, max_xx_], [data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*min_xx_, data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*max_xx_], '--', color='orange', label='ML model')
+
+        plt.plot([min_xx_, max_xx_], [data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*min_xx_, data_experiment[f'intercept{threshold}'] + data_experiment['coefficient']*max_xx_], '--', color='orange', label=f'Regression at {threshold} threshold')
 
         for idx in range(first_idx_test, last_idx_test):
 
