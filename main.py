@@ -1,5 +1,10 @@
 from functions import *
 
+"""
+This is the main function to analyze the logs from the ENI clusters. 
+It is automatic, once you fill the configuration file.
+"""
+
 if __name__ == '__main__':
     
     with open("config/config_analysis_log.yaml", "r") as file:
